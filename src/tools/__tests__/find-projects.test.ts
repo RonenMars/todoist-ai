@@ -239,8 +239,15 @@ describe(`${FIND_PROJECTS} tool`, () => {
         //      (end-to-end execution tests)
 
         describe('ColorOutputSchema tolerance', () => {
-            it('should coerce an unrecognised color value to undefined', () => {
-                expect(ColorOutputSchema.parse('grey')).toBeUndefined()
+            it('should normalise "grey" to "gray" (API alias)', () => {
+                expect(ColorOutputSchema.parse('grey')).toBe('gray')
+            })
+
+            it('should normalise "teal" to "turquoise" (API alias)', () => {
+                expect(ColorOutputSchema.parse('teal')).toBe('turquoise')
+            })
+
+            it('should coerce a truly unrecognised color value to undefined', () => {
                 expect(ColorOutputSchema.parse('unknown-color')).toBeUndefined()
             })
 
@@ -250,11 +257,11 @@ describe(`${FIND_PROJECTS} tool`, () => {
                 expect(ColorOutputSchema.parse('charcoal')).toBe('charcoal')
             })
 
-            it('should coerce unrecognised colors to undefined in ProjectSchema', () => {
+            it('should coerce truly unrecognised colors to undefined in ProjectSchema', () => {
                 const project = {
                     id: 'proj-1',
                     name: 'Inbox',
-                    color: 'grey', // unrecognised
+                    color: 'unknown-color', // truly unrecognised
                     isFavorite: false,
                     isShared: false,
                     inboxProject: true,
@@ -262,8 +269,22 @@ describe(`${FIND_PROJECTS} tool`, () => {
                 }
                 // Should parse without throwing
                 const parsed = ProjectSchema.parse(project)
-                // Unrecognised color coerces to undefined
+                // Truly unrecognised color coerces to undefined
                 expect(parsed.color).toBeUndefined()
+            })
+
+            it('should normalise "grey" to "gray" in ProjectSchema', () => {
+                const project = {
+                    id: 'proj-1',
+                    name: 'Inbox',
+                    color: 'grey', // API alias for "gray"
+                    isFavorite: false,
+                    isShared: false,
+                    inboxProject: true,
+                    viewStyle: 'list',
+                }
+                const parsed = ProjectSchema.parse(project)
+                expect(parsed.color).toBe('gray')
             })
 
             it('should not throw for ProjectSchema when color is unrecognised', () => {
@@ -281,9 +302,8 @@ describe(`${FIND_PROJECTS} tool`, () => {
             })
         })
 
-        it('should succeed for a full list when a project has an unrecognised color', async () => {
-            // "grey" is returned by the Todoist API but is not in the 20-key color enum.
-            // Before the fix, the MCP SDK's output validation would throw -32602 here.
+        it('should succeed for a full list when a project has the "grey" API alias', async () => {
+            // "grey" is returned by the Todoist API and is now normalised to "gray".
             const mockProjects = [
                 createMockProject({
                     id: TEST_IDS.PROJECT_INBOX,
@@ -296,15 +316,15 @@ describe(`${FIND_PROJECTS} tool`, () => {
 
             mockTodoistApi.getProjects.mockResolvedValue(createMockApiResponse(mockProjects))
 
-            // Should not throw (before the fix, MCP SDK output validation would throw -32602)
             const result = await findProjects.execute({ limit: 50 }, mockTodoistApi)
 
-            // Should return all projects
+            // Should return all projects without errors
+            // (ColorOutputSchema normalises "grey" → "gray" when the MCP SDK validates output)
             expect(result.structuredContent.projects).toHaveLength(2)
             expect(result.structuredContent.totalCount).toBe(2)
         })
 
-        it('should return matching projects when the matching project has an unrecognised color', async () => {
+        it('should return matching projects when the matching project has the "grey" API alias', async () => {
             // Before the fix, the search path would silently swallow the validation error
             // and return { projects: [], totalCount: 0 } — indistinguishable from no match.
             const matchingProject = createMockProject({
